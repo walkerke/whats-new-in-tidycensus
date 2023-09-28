@@ -6,6 +6,7 @@ format:
   revealjs: 
     theme: [default, custom.scss]
     embed-resources: true
+    logo: img/logo.png
 execute: 
   echo: true
 ---
