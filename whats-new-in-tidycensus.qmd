@@ -1,0 +1,438 @@
+---
+title: "What's new in tidycensus"
+subtitle: "2022 1-year ACS and 2020 Detailed DHC-A data"
+author: "Kyle Walker"
+format: 
+  revealjs: 
+    theme: [default, custom.scss]
+    embed-resources: true
+execute: 
+  echo: true
+---
+```{r setup, include = FALSE}
+options(tigris_use_cache = TRUE)
+```
+
+
+## Don't miss my GIS workshop series in October!
+
+Use the discount code __DDHCA__ for 25% off the following:
+
+* October 4 (11am CT): [Getting Started with Geographic Information Systems in R](https://www.eventbrite.com/e/717200314447?aff=oddtdtcreator)
+
+* October 11 (11am CT): [Interactive Mapping with R](https://www.eventbrite.com/e/interactive-mapping-with-r-registration-717251587807?aff=oddtdtcreator)
+
+* Past workshops on 2020 Census Data are available at https://walker-data.com/workshops.html
+
+## About me
+
+* Associate Professor of Geography at TCU 
+
+* Spatial data science researcher and consultant
+
+* Package developer: __tidycensus__, __tigris__, __mapboxapi__, __crsuggest__, __idbr__ (R), __pygris__ (Python)
+
+* Book: [_Analyzing US Census Data: Methods, Maps and Models in R_](https://walker-data.com/census-r/)
+
+## Getting started
+
+* To use these new features, make sure that tidycensus 1.5 and tigris 2.0.4 are installed.  
+
+```r
+install.packages("tidycensus", "tigris", "mapview")
+```
+
+# The 2022 1-year American Community Survey data
+
+## What is the ACS?
+
+* Annual survey of 3.5 million US households 
+
+* Covers topics not available in decennial US Census data (e.g. income, education, language, housing characteristics)
+
+* Available as 1-year estimates (for geographies of population 65,000 and greater) and 5-year estimates (for geographies down to the block group)
+
+* Data delivered as _estimates_ characterized by _margins of error_
+
+## Working with ACS data in tidycensus
+
+* The `get_acs()` function is your portal to access ACS data using tidycensus
+
+* The two required arguments are `geography` and `variables`.  The function defaults to the 2017-2021 5-year ACS
+
+```{r acs}
+library(tidycensus)
+
+median_income <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "TX",
+  year = 2021
+)
+```
+
+---
+
+* ACS data are returned with five columns: `GEOID`, `NAME`, `variable`, `estimate`, and `moe`
+
+```{r view-acs}
+median_income
+```
+
+## 1-year ACS data
+
+* 1-year ACS data are more current, but are only available for geographies of population 65,000 and greater
+
+* Access 1-year ACS data with the argument `survey = "acs1"`; defaults to `"acs5"`
+
+```{r acs-1-year}
+#| code-line-numbers: "|5|6"
+
+median_income_1yr <- get_acs(
+  geography = "place",
+  state = "TX",
+  variables = "B19013_001",
+  year = 2022,
+  survey = "acs1" 
+)
+```
+
+
+# The 2022 1-year ACS: best practices
+
+## Understanding limitations of the 1-year ACS
+
+* The 1-year American Community Survey is only available for geographies with population 65,000 and greater.  This means: 
+
+::: {.incremental}
+
+- Only 848 of 3,221 counties are available
+- Only 646 of 31,908 cities / Census-designated places are available
+- No data for Census tracts, block groups, ZCTAs, or any other geographies that typically have populations below 65,000
+
+:::
+
+
+## Finding available variables
+
+* Use `load_variables(2022, "acs1")` to view available variable codes in the 2022 1-year ACS
+
+* `"acs1/profile"` and `"acs1/subject"` are also available for the Data Profile and Subject Tables respectively
+
+```{r}
+load_variables(2022, "acs1")
+```
+
+
+## Data sparsity and margins of error
+
+* You may encounter data issues in the 1-year ACS data that are less pronounced in the 5-year ACS.  For example: 
+
+::: {.incremental}
+* Values available in the 5-year ACS may not be available in the corresponding 1-year ACS tables
+
+* If available, they will likely have larger margins of error
+
+* Your job as an analyst: balance need for _certainty_ vs. need for _recency_ in estimates
+
+:::
+
+## Example: Punjabi speakers by state (1-year ACS)
+
+```{r}
+get_acs(
+  geography = "state",
+  variables = "B16001_054",
+  year = 2022,
+  survey = "acs1"
+)
+```
+## Punjabi speakers by state (5-year ACS)
+
+```{r}
+get_acs(
+  geography = "state",
+  variables = "B16001_054",
+  year = 2021,
+  survey = "acs5"
+)
+```
+
+
+## What about mapping 1-year ACS data?
+
+* One of the best features of tidycensus is the argument `geometry = TRUE`, which gets you the correct Census geometries with no hassle
+
+* Typically it is difficult to map 1-year ACS data below the state level as your data will have gaps due to the population restrictions
+
+## Example: "mapping" 1-year ACS data
+
+```{r}
+tx_education <- get_acs(
+  geography = "county",
+  variables = "DP02_0068P",
+  state = "TX",
+  year = 2022,
+  survey = "acs1",
+  geometry = TRUE
+)
+```
+
+## Example: "mapping" 1-year ACS data
+
+```{r}
+library(mapview)
+
+mapview(tx_education, zcol = "estimate")
+```
+
+
+
+## Mapping small(er) areas with PUMAs
+
+* Consider using Public Use Microdata Areas (PUMAs) for geographically-consistent substate mapping
+
+* PUMAs are typically used for microdata geography; however, I find them quite useful to approximate real state submarkets, planning areas, etc.  
+
+```{r}
+wa_wfh <- get_acs(
+  geography = "puma",
+  variables = "DP03_0024P",
+  state = "WA",
+  survey = "acs1",
+  year = 2022,
+  geometry = TRUE
+)
+```
+
+
+---
+
+```{r}
+library(mapview)
+
+mapview(wa_wfh, zcol = "estimate")
+```
+
+
+## Bonus: new Connecticut county-equivalents
+
+* The 2022 ACS is the first to include the new Connecticut Planning Regions in the "county" geography
+
+```{r}
+ct_income <- get_acs(
+  geography = "county",
+  variables = "B19013_001",
+  state = "CT",
+  year = 2022,
+  survey = "acs1",
+  geometry = TRUE
+)
+```
+
+---
+
+```{r}
+mapview(ct_income, zcol = "estimate")
+```
+
+
+## Time-series analysis with the 1-year ACS: some notes
+
+::: {.incremental}
+* Variables in the Data Profile and Subject Tables can change names over time
+
+* You'll need to watch out for the Connecticut issue and changing geographies
+
+* The 2020 1-year ACS was not released (and is not in tidycensus), so your time-series can break if you are using iteration to pull data
+
+:::
+
+# The 2020 Decennial Census Detailed DHC-A File
+
+## The Detailed DHC-A File
+
+* Tabulation of 2020 Decennial Census results for population by sex and age
+
+* Key feature: break-outs for thousands of racial and ethnic groups
+
+## Limitations of the DDHC-A File
+
+* An "adaptive design" is used, meaning that data for different groups / geographies may be found in different tables
+
+* There is considerable sparsity in the data, especially when going down to the Census tract level
+  
+## Getting Decennial Census data in tidycensus
+
+```{r}
+library(tidycensus)
+
+bexar_population <- get_decennial(
+  geography = "tract",
+  variables = "P1_001N",
+  state = "TX",
+  county = "Bexar",
+  sumfile = "dhc",
+  year = 2020
+)
+```
+
+  
+## Using the DDHC-A File in tidycensus
+
+* You'll query the DDHC-A file with the argument `sumfile = "ddhca"` in `get_decennial()`
+
+* A new argument, `pop_group`, is required to use the DDHC-A; it takes a population group code. 
+
+* Use `pop_group = "all"` to query for all groups; set `pop_group_label = TRUE` to return the label for the population group
+
+* Look up variables with `load_variables(2020, "ddhca")`
+
+## Example usage of the DDHC-A File
+
+```{r ddhca-example}
+mn_population_groups <- get_decennial(
+  geography = "state",
+  variables = "T01001_001N",
+  state = "MN",
+  year = 2020,
+  sumfile = "ddhca",
+  pop_group = "all",
+  pop_group_label = TRUE
+)
+
+```
+
+---
+
+```{r}
+mn_population_groups
+```
+
+
+
+## Looking up group codes
+
+* A new function, `get_pop_groups()`, helps you look up population group codes
+
+* It works for SF2/SF4 in 2000 and SF2 in 2010 as well!
+
+```{r}
+available_groups <- get_pop_groups(2020, "ddhca")
+```
+
+## Understanding sparsity in the DDHC-A File
+
+* The DDHC-A File uses an "adaptive design" that makes certain tables available for specific geographies
+
+<img src="img/adaptive_design.png" style="width: 800px">
+
+## You may see this error...
+
+```{r}
+#| error: true
+
+get_decennial(
+  geography = "county",
+  variables = "T02001_001N",
+  state = "MN",
+  county = "Hennepin",
+  pop_group = "1325",
+  year = 2020,
+  sumfile = "ddhca"
+)
+```
+
+
+## How to check for data availability
+
+* A new function, `check_ddhca_groups()`, can be used to see which tables to use for the data you want
+
+```{r}
+check_ddhca_groups(
+  geography = "county", 
+  pop_group = "1325", 
+  state = "MN", 
+  county = "Hennepin"
+)
+```
+
+## Mapping DDHC-A data
+
+* Given data sparsity in the DDHC-A data, should you make maps with it?
+
+* I'm not personally a fan of mapping data that are geographically sparse. But...
+
+::: {.incremental}
+* I think it is OK to map DDHC-A data if you think through the data limitations in your map design
+:::
+
+## Example: Somali populations by Census tract in Minneapolis
+
+```{r}
+library(tidycensus)
+
+hennepin_somali <- get_decennial(
+  geography = "tract",
+  variables = "T01001_001N",
+  state = "MN",
+  county = "Hennepin",
+  year = 2020,
+  sumfile = "ddhca",
+  pop_group = "1325",
+  pop_group_label = TRUE,
+  geometry = TRUE
+)
+
+```
+
+---
+
+```{r}
+mapview(hennepin_somali, zcol = "value")
+```
+
+## Alternative approach: dot-density mapping
+
+* I don't think choropleth maps are advisable with geographically incomplete data in most cases
+
+* Other map types - like graduated symbols or dot-density maps - may be more appropriate
+
+* The tidycensus function `as_dot_density()` allows you to specify the number of people represented in each dot, which means you can represent data-suppressed areas as 0 more confidently
+
+---
+
+```{r}
+somali_dots <- as_dot_density(
+  hennepin_somali,
+  value = "value",
+  values_per_dot = 25
+)
+
+mapview::mapview(somali_dots, cex = 0.01, layer.name = "Somali population<br>1 dot = 25 people",
+                 col.regions = "navy", color = "navy")
+```
+
+
+## Notes on differential privacy
+
+::: {.incremental}
+
+* The use of differential privacy in the 2020 DDHC-A File makes some traditional Census analyses impossible
+
+* For example, groups within a group hierarchy may not sum to the parent group
+
+* Small counts (e.g. at the tract level) will be suppressed; the threshold is 22 for detailed groups
+
+* [See the DDHC-A technical documentation for more information](https://www2.census.gov/programs-surveys/decennial/2020/technical-documentation/complete-tech-docs/detailed-demographic-and-housing-characteristics-file-a/2020census-detailed-dhc-a-techdoc.pdf)
+
+:::
+
+# Thank you!
+
+
+
+
+
+
+
